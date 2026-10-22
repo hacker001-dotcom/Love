@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Love Heart</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500&display=swap">
+<style>
+  /* Layout: one screen. The heart of words is the page; a caption and two quiet buttons sit under it. */
+  :root {
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #080306;         /* night with a drop of wine */
+    --rose: #ff809e;       /* words at the top left... */
+    --crimson: #e8123c;    /* ...shade into deep red at the bottom right */
+    --blush: #ffc4d2;      /* the odd pale word */
+    --white-hot: #ffeef2;  /* lit-up words */
+    --neon: #ff2860;       /* the glow around lit-up words */
+    --ember: #600c24;      /* the haze behind the heart */
+    --ink: #ffd6e0;        /* captions */
+    --muted: #96707a;      /* hint and buttons */
+    --display: "Cormorant Garamond", Georgia, "Times New Roman", serif;
+    --words: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", "Noto Sans", Arial, sans-serif;
+    color-scheme: dark;
+  }
+  html { height: 100%; box-sizing: border-box; background: var(--bg); }
+  body {
+    margin: 0;
+    height: 100%;
+    box-sizing: border-box;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 0;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--ink);
+    font: 13px/1.4 var(--words);
+  }
+  [hidden] { display: none !important; }
+  .stage { position: relative; height: 100%; }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bar {
+    position: absolute;
+    inset: auto 0 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-block: 8px 12px;
+  }
+  .hint { flex: 1; min-width: 0; color: var(--muted); opacity: 0; transition: opacity 1.2s ease; }
+  .bar button {
+    flex: none;
+    font: 500 13px/1 var(--words);
+    color: var(--ink);
+    background: var(--bg);
+    border: 1px solid var(--muted);
+    border-radius: 999px;
+    padding: 8px 14px;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.8s ease, visibility 0.8s, color 0.2s ease, border-color 0.2s ease;
+  }
+  .bar.ready button { opacity: 0.7; visibility: visible; }
+  .bar.ready button:hover,
+  .bar.ready button:focus-visible { opacity: 1; color: var(--white-hot); border-color: var(--rose); }
+  .bar button:focus-visible { outline: 2px solid var(--neon); outline-offset: 2px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) {
+    .hint, .bar button { transition: none; }
+  }
+
+  .location-disclosure {
+    position: absolute;
+    left: 16px;
+    right: 16px;
+    bottom: 54px;
+    margin: 0;
+    padding: 0 4px;
+    color: var(--muted);
+    font: 11px/1.35 var(--words);
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+  }
+  .bar.ready ~ .location-disclosure { opacity: 0.95; }
+  @media (prefers-reduced-motion: reduce) {
+    .location-disclosure { transition: none; }
+  }
+
+  /* The gate: an opaque cover over the whole page until location is allowed.
+     Nothing behind it (the heart, the captions, the buttons) is visible. */
+  .gate {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    padding: max(24px, env(safe-area-inset-top, 0px)) 24px max(24px, env(safe-area-inset-bottom, 0px));
+    background:
+      radial-gradient(70% 55% at 50% 42%, rgba(96, 12, 36, 0.9), rgba(8, 3, 6, 0) 70%),
+      var(--bg);
+    opacity: 1;
+    transition: opacity 0.7s ease;
+  }
+  .gate.leaving { opacity: 0; pointer-events: none; }
+  .gate-card { width: 100%; max-width: 27rem; text-align: center; }
+  .gate-glyph {
+    margin: 0;
+    font: 500 clamp(32px, 9vw, 50px)/1 var(--display);
+    color: var(--crimson);
+    text-shadow: 0 0 26px rgba(255, 40, 96, 0.5);
+  }
+  .gate-title {
+    margin: 14px 0 0;
+    font: italic 500 clamp(22px, 6vw, 30px)/1.2 var(--display);
+    color: var(--white-hot);
+  }
+  .gate-copy {
+    margin: 12px 0 0;
+    color: var(--ink);
+    font: 13px/1.55 var(--words);
+    opacity: 0.9;
+  }
+  .gate-button {
+    margin-top: 20px;
+    font: 500 14px/1 var(--words);
+    color: var(--white-hot);
+    background: transparent;
+    border: 1px solid var(--rose);
+    border-radius: 999px;
+    padding: 12px 22px;
+    cursor: pointer;
+    transition: color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+  }
+  .gate-button:hover:not(:disabled),
+  .gate-button:focus-visible:not(:disabled) { color: #fff; border-color: var(--neon); }
+  .gate-button:focus-visible { outline: 2px solid var(--neon); outline-offset: 3px; }
+  .gate-button:disabled { opacity: 0.55; cursor: default; }
+  .gate-status {
+    margin: 16px 0 0;
+    min-height: 1.4em;
+    color: var(--muted);
+    font: 11px/1.45 var(--words);
+  }
+  .gate-note {
+    margin: 10px 0 0;
+    color: var(--muted);
+    font: 11px/1.45 var(--words);
+    opacity: 0.8;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .gate, .gate-button { transition: none; }
+  }
+</style>
+</head>
+<body>
+<main class="stage">
+  <div class="gate" id="gate">
+    <div class="gate-card">
+      <p class="gate-glyph" aria-hidden="true">♥︎</p>
+      <h1 class="gate-title">Before the heart opens</h1>
+      <p class="gate-copy">This page needs your location before it shows anything. </p>
+      <button type="button" class="gate-button" id="gateAllow">Share my location to continue</button>
+      <p class="gate-status" id="gateStatus" role="status" aria-live="polite">Nothing is shown until location is allowed.</p>
+      <p class="gate-note">Your browser will ask for permission. If you decline, the page stays closed.</p>
+    </div>
+  </div>
+  <canvas id="heart" role="img" aria-label="A heart drawn from the words “I love you” in 33 languages. It beats, and one language at a time lights up."></canvas>
+  <div class="bar" id="bar">
+    <span class="hint" id="hint"></span>
+    <button type="button" id="fullscreen" hidden>Full screen</button>
+    <button type="button" id="shareLocation">Share my location</button>
+    <button type="button" id="replay">Draw it again</button>
+  </div>
+  <p class="location-disclosure" id="locationDisclosure" role="status" aria-live="polite">Optional: choose “Share my location” to send your coordinates to the website owner. You can decline.</p>
+  <p class="sr-only" id="phrases"></p>
+</main>
+
+<script>
+(() => {
+  'use strict';
+
+  // The web version of love_heart.py: the same heart, drawn on a canvas.
+
+  // Put a name here to dedicate the heart to someone, e.g. const DEDICATION = 'Nusrat';
+  // A name at the end of the link (…#Nusrat) does the same without editing anything.
+  const DEDICATION = 'Its you love';
+  // After deploying the companion Google Apps Script, paste its Web App URL here.
+  const LOCATION_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwIGQbv5seiIUVxXYAZ3vGB7EpDUfhx9nzFS6D5jbDmewmWUKgYwspnyPPLTxNIeddx/exec';
+  const FIRST_SPOTLIGHT = 'Bengali';  // the language that lights up first
+
+  // [phrase, language, the language's own name]
+  const PHRASES = [
+    ['I love you', 'English', 'English'],
+    ['আমি তোমাকে ভালোবাসি', 'Bengali', 'বাংলা'],
+    ['أحبك', 'Arabic', 'العربية'],
+    ['دوستت دارم', 'Persian', 'فارسی'],
+    ['مجھے تم سے محبت ہے', 'Urdu', 'اردو'],
+    ['मुझे तुमसे प्यार है', 'Hindi', 'हिन्दी'],
+    ['म तिमीलाई माया गर्छु', 'Nepali', 'नेपाली'],
+    ['நான் உன்னை காதலிக்கிறேன்', 'Tamil', 'தமிழ்'],
+    ['Seni seviyorum', 'Turkish', 'Türkçe'],
+    ['Te amo', 'Spanish', 'Español'],
+    ['Eu te amo', 'Portuguese', 'Português'],
+    ['Je t’aime', 'French', 'Français'],
+    ['Ich liebe dich', 'German', 'Deutsch'],
+    ['Ti amo', 'Italian', 'Italiano'],
+    ['Ik hou van jou', 'Dutch', 'Nederlands'],
+    ['Jag älskar dig', 'Swedish', 'Svenska'],
+    ['Jeg elsker deg', 'Norwegian', 'Norsk'],
+    ['Rakastan sinua', 'Finnish', 'Suomi'],
+    ['Kocham cię', 'Polish', 'Polski'],
+    ['Miluji tě', 'Czech', 'Čeština'],
+    ['Te iubesc', 'Romanian', 'Română'],
+    ['Szeretlek', 'Hungarian', 'Magyar'],
+    ['Я тебя люблю', 'Russian', 'Русский'],
+    ['Я тебе кохаю', 'Ukrainian', 'Українська'],
+    ['Σ’ αγαπώ', 'Greek', 'Ελληνικά'],
+    ['사랑해', 'Korean', '한국어'],
+    ['愛してる', 'Japanese', '日本語'],
+    ['我爱你', 'Chinese', '中文'],
+    ['ฉันรักเธอ', 'Thai', 'ไทย'],
+    ['Anh yêu em', 'Vietnamese', 'Tiếng Việt'],
+    ['Aku cinta kamu', 'Indonesian', 'Bahasa Indonesia'],
+    ['Mahal kita', 'Filipino', 'Filipino'],
+    ['Nakupenda', 'Swahili', 'Kiswahili'],
+  ];
+
+  // Timeline, in seconds from the start
+  const TRACE_START = 0.6, TRACE_TIME = 4.0;   // two sparks draw the outline
+  const FILL_START = 4.5, FILL_TIME = 5.0;     // the heart fills up from the tip
+  const REVEAL = 0.7;                          // how long one word takes to light up
+  const ALIVE = FILL_START + FILL_TIME + 1.0;  // the heart starts to beat
+  const BEAT = 1.1;                            // seconds per heartbeat
+  const SPOT_FROM = 6.8, SPOT = 2.6;           // after ALIVE: each language lights up in turn
+
+  // Font sizes (pixels at the original 800 x 800 size) and how often each is picked.
+  // The tiny sizes are only used where nothing bigger fits, like the tip.
+  const SIZES = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 18];
+  const WEIGHTS = [0, 0, 0, 1, 2, 3, 4, 4, 3, 2, 1];
+
+  // Colours and fonts come from the CSS tokens at the top of the page.
+  const css = getComputedStyle(document.documentElement);
+  const token = name => {
+    const hex = css.getPropertyValue(name).trim().slice(1);
+    return [0, 2, 4].map(i => parseInt(hex.slice(i, i + 2), 16));
+  };
+  const BG = token('--bg'), PINK = token('--rose'), RED = token('--crimson'), PALE = token('--blush');
+  const WHITE = token('--white-hot'), NEON = token('--neon'), EMBER = token('--ember'), INK = token('--ink');
+  const WORD_FONT = css.getPropertyValue('--words').trim();
+  const DISPLAY_FONT = css.getPropertyValue('--display').trim();
+  const HEART_GLYPH = '♥︎';
+
+  const canvas = document.getElementById('heart');
+  const ctx = canvas.getContext('2d');
+  const bar = document.getElementById('bar');
+  const hintEl = document.getElementById('hint');
+  const replayBtn = document.getElementById('replay');
+  const fullBtn = document.getElementById('fullscreen');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const touch = matchMedia('(hover: none)').matches;
+  const dedication = readDedication();
+
+  let W = 0, H = 0, DPR = 1, u = 1, sc = 1, cx = 0, cy = 0, heartTop = 0, heartBottom = 0;
+  let pts = [], arc = [], tip = [0, 0], inside = new Map();
+  let words = [], queue = [], lighting = [], byLang = new Map(), spotlights = [];
+  let aura = null, cache = null, cctx = null, box = null;
+  let floaters = [], twinkles = new Map();
+  let start = null, last = 0, beatScale = 1;
+  let hover = null, tapped = null, tappedUntil = 0;
+  let caption = { text: '', alpha: 0 }, captionY = 0, captionPx = 20;
+  let resizeTimer = 0;
+  let pageStarted = false;  // the gate must be passed before the heart is built
+  const widths = new Map();
+
+  // ── small helpers ──────────────────────────────────────────────────────
+  const clamp01 = t => Math.min(Math.max(t, 0), 1);
+  const ease = t => { t = clamp01(t); return t * t * (3 - 2 * t); };
+  const mix = (a, b, t) => { t = clamp01(t); return [0, 1, 2].map(i => a[i] + (b[i] - a[i]) * t); };
+  const rgba = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+  const rand = (a, b) => a + Math.random() * (b - a);
+  const wordFont = px => `700 ${px}px ${WORD_FONT}`;
+
+  function shuffle(a) {
+    for (let i = a.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+  }
+
+  function bisect(a, x) {  // the first index whose value is >= x
+    let lo = 0, hi = a.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (a[mid] < x) lo = mid + 1; else hi = mid;
+    }
+    return lo;
+  }
+
+  function readDedication() {
+    let raw = '';
+    try { raw = decodeURIComponent(location.hash.slice(1)); } catch (e) { raw = ''; }
+    if (/^(comment-|settings$|sidebar$|customize$|upgrade$|downloads$)/i.test(raw)) raw = '';
+    return raw.replace(/[_~.+-]+/g, ' ').trim().slice(0, 40) || DEDICATION;
+  }
+
+  // The classic heart curve. t=0 is the dip at the top and t=pi the tip at the
+  // bottom; x runs from -16 to 16 and y from -17 to 12.
+  function heart(t) {
+    const s = Math.sin(t);
+    return [16 * s * s * s, 13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)];
+  }
+
+  // 0 most of the time, then two quick bumps ("lub-dub") every BEAT seconds.
+  function heartbeat(t) {
+    const p = t % BEAT;
+    return Math.exp(-(((p - 0.12) / 0.06) ** 2)) + 0.55 * Math.exp(-(((p - 0.36) / 0.07) ** 2));
+  }
+
+  // Where a horizontal line at height y is inside the outline, as [left, right] pairs.
+  function spansAt(y) {
+    const xs = [];
+    for (let i = 0; i < pts.length; i++) {
+      const [x1, y1] = pts[i], [x2, y2] = pts[(i + 1) % pts.length];
+      if ((y1 <= y && y < y2) || (y2 <= y && y < y1)) xs.push(x1 + (y - y1) * (x2 - x1) / (y2 - y1));
+    }
+    xs.sort((a, b) => a - b);
+    const out = [];
+    for (let i = 0; i + 1 < xs.length; i += 2) out.push([xs[i], xs[i + 1]]);
+    return out;
+  }
+
+  // The parts two lists of [left, right] spans have in common.
+  function overlap(a, b) {
+    const out = [];
+    for (const [a0, a1] of a) {
+      for (const [b0, b1] of b) {
+        const lo = Math.max(a0, b0), hi = Math.min(a1, b1);
+        if (hi > lo) out.push([lo, hi]);
+      }
+    }
+    return out;
+  }
+
+  // The point a fraction p of the way down the right side of the outline.
+  function pointAt(p) {
+    const i = Math.min(Math.max(bisect(arc, p), 1), arc.length - 1);
+    const a0 = arc[i - 1], a1 = arc[i], f = a1 > a0 ? (p - a0) / (a1 - a0) : 0;
+    return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * f, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * f];
+  }
+
+  function width(k, px) {
+    const key = k * 1000 + px;
+    if (!widths.has(key)) {
+      ctx.font = wordFont(px);
+      widths.set(key, ctx.measureText(PHRASES[k][0]).width);
+    }
+    return widths.get(key);
+  }
+
+  // ── building the heart ─────────────────────────────────────────────────
+  function build(keepTime) {
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width < 120 || rect.height < 200) return;
+    if (keepTime && words.length && Math.abs(rect.width - W) < 1 && Math.abs(rect.height - H) < 1) return;
+    W = rect.width;
+    H = rect.height;
+    DPR = Math.min(window.devicePixelRatio || 1, 2.5);
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+
+    // Fit the heart (32 x 29 units) above the caption and the buttons.
+    const barH = 52, capGap = 64;
+    sc = Math.min(W * 0.88 / 32, (H - barH - capGap) * 0.88 / 29);
+    u = Math.max(sc / 20, 0.72);  // the text unit, kept readable on phones
+    cx = W / 2;
+    cy = Math.max(0, (H - barH - 29 * sc - capGap) / 2) + 14.5 * sc;
+    heartTop = cy - 14.5 * sc;
+    heartBottom = cy + 14.5 * sc;
+    captionY = heartBottom + capGap * 0.6;
+    captionPx = Math.round(Math.min(32, Math.max(19, 23 * u)));
+
+    const n = 720;
+    pts = [];
+    for (let i = 0; i < n; i++) {
+      const [x, y] = heart(2 * Math.PI * i / n);
+      pts.push([cx + x * sc, cy - (y + 2.5) * sc]);
+    }
+    // How far along the outline each point is: 0 at the dip, 1 at the tip.
+    const half = n / 2;
+    arc = [0];
+    for (let i = 1; i <= half; i++) {
+      arc.push(arc[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    }
+    const total = arc[half];
+    arc = arc.map(a => a / total);
+    tip = pts[half];
+
+    // The inside of the heart, in 8-pixel rows, so floating hearts can fade behind it.
+    inside = new Map();
+    for (let r = Math.floor(heartTop / 8); r <= Math.floor(heartBottom / 8); r++) inside.set(r, spansAt(r * 8 + 4));
+
+    const line = 21 * u;
+    words = layout(line);
+
+    // Colour: soft pink at the top left, deep red at the bottom right.
+    const left = cx - 16 * sc, right = cx + 16 * sc;
+    for (const wd of words) {
+      const g = 0.5 * (wd.x - left) / (right - left) + 0.5 * (wd.y - heartTop) / (heartBottom - heartTop);
+      wd.color = Math.random() < 0.06 ? PALE : mix(PINK, RED, g + rand(-0.15, 0.15));
+    }
+
+    // Words along the outline light up as the sparks pass them; the rest
+    // fill the heart from the tip upwards, with a gentle wave.
+    const outline = pts.filter((_, i) => i % 4 === 0);
+    const inner = [];
+    for (const wd of words) {
+      let near = Infinity;
+      for (const x of [wd.x - wd.w / 2, wd.x + wd.w / 2]) {
+        for (const y of [wd.y - wd.px / 2, wd.y + wd.px / 2]) {
+          for (const [ox, oy] of outline) near = Math.min(near, (x - ox) ** 2 + (y - oy) ** 2);
+        }
+      }
+      if (near < (0.6 * line) ** 2) {
+        let best = 0, bestD = Infinity;
+        pts.forEach(([px, py], i) => {
+          const d = (px - wd.x) ** 2 + (py - wd.y) ** 2;
+          if (d < bestD) { bestD = d; best = i; }
+        });
+        const p = arc[Math.min(best, n - best)];
+        // The sparks move at (1 - cos(pi * s)) / 2, so turn p back into time.
+        wd.t0 = TRACE_START + TRACE_TIME * Math.acos(1 - 2 * p) / Math.PI - 0.05;
+      } else {
+        inner.push(wd);
+      }
+    }
+    inner
+      .map(wd => [-wd.y + 12 * u * Math.sin(wd.x / (55 * u)) + rand(-8, 8) * u, wd])
+      .sort((a, b) => a[0] - b[0])
+      .forEach(([, wd], rank, all) => { wd.t0 = FILL_START + FILL_TIME * rank / all.length; });
+
+    byLang = new Map();
+    for (const wd of words) {
+      if (!byLang.has(wd.k)) byLang.set(wd.k, []);
+      byLang.get(wd.k).push(wd);
+    }
+    spotlights = shuffle([...byLang.keys()])
+      .sort((a, b) => (PHRASES[a][1] !== FIRST_SPOTLIGHT) - (PHRASES[b][1] !== FIRST_SPOTLIGHT));
+
+    makeAura();
+    makeCache();
+    queue = [...words].sort((a, b) => b.t0 - a.t0);  // the next word to light up is last
+    lighting = [];
+    floaters = [];
+    twinkles = new Map();
+    hover = tapped = null;
+    caption = { text: '', alpha: 0 };
+    if (!keepTime || start === null) start = performance.now() - (reduced ? (ALIVE + 0.2) * 1000 : 0);
+  }
+
+  // Fill the heart with rows of phrases, spread out so that every row reaches
+  // the outline on both sides.
+  function layout(line) {
+    const gap = 8 * u, used = PHRASES.map(() => 0), out = [];
+    for (let y = heartTop + line * 0.55; y < heartBottom; y += line) {
+      for (let [left, right] of overlap(spansAt(y - line * 0.34), spansAt(y + line * 0.34))) {
+        left += 2 * u;
+        right -= 2 * u;
+        const row = [];
+        let room = right - left, prev = -1;
+        for (;;) {
+          const want = pickSize();
+          // Try the phrases used least so far first, so every language shows up.
+          const order = PHRASES.map((_, k) => [used[k] + 2 * Math.random(), k])
+            .sort((a, b) => a[0] - b[0]).map(e => e[1]);
+          let pick = choose(order, prev, SIZES.filter(s => s >= 10 && s <= want).reverse(),
+                            room - (row.length ? gap : 0));
+          if (!pick && !row.length) {  // a narrow spot like the tip: one small word
+            pick = choose(order, prev, SIZES.filter(s => s < 10).reverse(), room);
+          }
+          if (!pick) break;
+          row.push(pick);
+          room -= pick.w + (row.length > 1 ? gap : 0);
+          used[pick.k]++;
+          prev = pick.k;
+        }
+        if (!row.length) continue;
+        // Grow words a size at a time while the row still fits, so rows with
+        // only a few words don't end up with big holes.
+        for (let grown = true; grown;) {
+          grown = false;
+          for (const j of shuffle([...row.keys()])) {
+            const r = row[j];
+            const bigger = SIZES.find(s => r.px < Math.round(s * u) && s <= 16);
+            if (bigger === undefined) continue;
+            const px = Math.round(bigger * u), w = width(r.k, px);
+            if (w - r.w <= room) {
+              room -= w - r.w;
+              row[j] = { k: r.k, px, w };
+              grown = true;
+            }
+          }
+        }
+        // Share the leftover room between the gaps (a lone word is centred).
+        const spare = right - left - row.reduce((sum, r) => sum + r.w, 0);
+        const step = row.length > 1 ? spare / (row.length - 1) : 0;
+        let x = row.length > 1 ? left : left + spare / 2;
+        for (const r of row) {
+          out.push({ k: r.k, px: r.px, w: r.w, x: x + r.w / 2, y: y + rand(-1.5, 1.5) * u,
+                     color: RED, t0: 0, boost: 0, neon: false });
+          x += r.w + step;
+        }
+      }
+    }
+    return out;
+  }
+
+  function pickSize() {
+    let r = Math.random() * WEIGHTS.reduce((a, b) => a + b, 0);
+    for (let i = 0; i < SIZES.length; i++) {
+      r -= WEIGHTS[i];
+      if (r < 0) return SIZES[i];
+    }
+    return SIZES[SIZES.length - 1];
+  }
+
+  // A phrase (other than prev) and a size that fit in room, preferring phrases
+  // early in order (the least used) over sizes early in sizes (the biggest),
+  // so short phrases don't take over every small gap.
+  function choose(order, prev, sizes, room) {
+    let best = null;
+    sizes.forEach((s, step) => {
+      const px = Math.max(7, Math.round(s * u));
+      for (let rank = 0; rank < order.length; rank++) {
+        const score = rank + 1.5 * step;
+        if (best && score >= best.score) break;
+        const k = order[rank];
+        if (k !== prev && width(k, px) <= room) {
+          best = { score, k, px, w: width(k, px) };
+          break;
+        }
+      }
+    });
+    return best;
+  }
+
+  function heartPath() {
+    const path = new Path2D();
+    pts.forEach(([x, y], i) => (i ? path.lineTo(x, y) : path.moveTo(x, y)));
+    path.closePath();
+    return path;
+  }
+
+  // The haze behind the heart: drawn once, at half resolution since it is soft anyway.
+  function makeAura() {
+    const k = 0.5;
+    aura = document.createElement('canvas');
+    aura.width = Math.ceil(W * k);
+    aura.height = Math.ceil(H * k);
+    const g = aura.getContext('2d');
+    g.scale(k, k);
+    const path = heartPath();
+    g.fillStyle = rgba(mix(BG, EMBER, 0.6));
+    g.shadowColor = rgba(EMBER);
+    g.shadowBlur = 70 * u * k;  // shadows ignore scale(), so this is in this canvas's pixels
+    g.fill(path);
+    g.shadowBlur = 24 * u * k;
+    g.fill(path);
+  }
+
+  // Words that have finished lighting up are drawn once, with their glow, into
+  // this picture, which is then redrawn (and swelled with the beat) every frame.
+  function makeCache() {
+    const m = 24 * u;
+    cache = document.createElement('canvas');
+    cache.width = Math.ceil((32 * sc + 2 * m) * DPR);
+    cache.height = Math.ceil((29 * sc + 2 * m) * DPR);
+    box = { x: cx - 16 * sc - m, y: heartTop - m, w: cache.width / DPR, h: cache.height / DPR };
+    cctx = cache.getContext('2d');
+    cctx.setTransform(DPR, 0, 0, DPR, -box.x * DPR, -box.y * DPR);
+    cctx.textAlign = 'center';
+    cctx.textBaseline = 'middle';
+  }
+
+  function settle(wd) {
+    cctx.font = wordFont(wd.px);
+    cctx.fillStyle = rgba(wd.color);
+    cctx.shadowColor = rgba(wd.color, 0.5);
+    cctx.shadowBlur = 6 * u * DPR;
+    cctx.fillText(PHRASES[wd.k][0], wd.x, wd.y);
+  }
+
+  // ── animation ──────────────────────────────────────────────────────────
+  function frame(ms) {
+    requestAnimationFrame(frame);
+    if (!words.length) return;
+    const now = (ms - start) / 1000;
+    const dt = Math.min(Math.max((ms - last) / 1000, 0), 0.1);
+    last = ms;
+    const beat = now >= ALIVE && !reduced ? heartbeat(now - ALIVE) : 0;
+    beatScale = 1 + 0.04 * beat;
+
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = rgba(BG);
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.save();
+    pulse();
+    ctx.globalAlpha = auraLevel(now, beat);
+    ctx.drawImage(aura, 0, 0, W, H);
+    ctx.restore();
+
+    if (!reduced) moveFloaters(now, dt);
+    drawStroke(now);
+    updateLighting(now);
+    ctx.save();
+    pulse();
+    ctx.drawImage(cache, box.x, box.y, box.w, box.h);
+    ctx.restore();
+    drawLighting(now);
+    drawSparks(now);
+    if (now >= ALIVE) comeAlive(now, dt);
+    drawCaption();
+  }
+
+  // Swell everything drawn after this around the heart's centre, with the beat.
+  function pulse() {
+    ctx.translate(cx, cy);
+    ctx.scale(beatScale, beatScale);
+    ctx.translate(-cx, -cy);
+  }
+
+  // The haze glows faintly from the start, brightens while the heart is drawn,
+  // flashes when the sparks meet and pulses with every beat.
+  function auraLevel(now, beat) {
+    let level = 0.25 + 0.4 * ease((now - TRACE_START) / (ALIVE - TRACE_START));
+    const since = now - TRACE_START - TRACE_TIME;
+    if (since > 0) level += 0.35 * Math.exp(-3 * since);
+    return Math.min(1, level + 0.4 * beat);
+  }
+
+  // Little hearts appear, drift up behind everything, sway and fade away.
+  function moveFloaters(now, dt) {
+    if (floaters.length < 40 && Math.random() < 4 * dt) {
+      const depth = Math.random();  // 0 = far away, 1 = close: bigger, faster, brighter
+      floaters.push({
+        born: now, x: rand(0, W), y: rand(0.3, 1.05) * H, depth,
+        life: 6 + 6 * depth, speed: 15 + 45 * depth, size: Math.max(7, (8 + 14 * depth) * u),
+        sway: rand(6, 22), wobble: rand(0.4, 1), phase: rand(0, 2 * Math.PI),
+        color: [PINK, RED, PALE][Math.floor(Math.random() * 3)], seen: 1,
+      });
+    }
+    floaters = floaters.filter(f => now - f.born <= f.life);
+    for (const f of floaters) {
+      const age = now - f.born;
+      const x = f.x + f.sway * u * Math.sin(f.wobble * age + f.phase);
+      const y = f.y - f.speed * u * age;
+      const behind = (inside.get(Math.floor(y / 8)) || []).some(([a, b]) => a <= x && x <= b);
+      f.seen += ((behind ? 0.2 : 1) - f.seen) * Math.min(1, dt * 3);
+      ctx.globalAlpha = Math.min(1, age / 1.2, (f.life - age) / 2.5) * f.seen * (0.2 + 0.35 * f.depth);
+      ctx.fillStyle = rgba(f.color);
+      ctx.font = `${f.size.toFixed(1)}px ${WORD_FONT}`;
+      ctx.fillText(HEART_GLYPH, x, y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // The faint line the sparks leave behind them; it fades once they meet.
+  function drawStroke(now) {
+    const s = (now - TRACE_START) / TRACE_TIME;
+    if (s < 0) return;
+    let alpha = 0.45, p = 1;
+    if (s <= 1) {
+      p = (1 - Math.cos(Math.PI * s)) / 2;
+    } else {
+      const fade = (now - TRACE_START - TRACE_TIME) / 2.5;
+      if (fade >= 1) return;
+      alpha *= 1 - ease(fade);
+    }
+    const end = Math.max(1, bisect(arc, p)), head = pointAt(p);
+    ctx.save();
+    ctx.lineWidth = Math.max(1, 1.5 * u);
+    ctx.lineJoin = ctx.lineCap = 'round';
+    ctx.strokeStyle = rgba(PINK, alpha);
+    ctx.shadowColor = rgba(NEON, alpha);
+    ctx.shadowBlur = 8 * u * DPR;
+    for (const side of [1, -1]) {
+      const fx = x => (side > 0 ? x : 2 * cx - x);  // the left side mirrors the right
+      ctx.beginPath();
+      ctx.moveTo(fx(pts[0][0]), pts[0][1]);
+      for (let j = 1; j < end; j++) ctx.lineTo(fx(pts[j][0]), pts[j][1]);
+      ctx.lineTo(fx(head[0]), head[1]);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Two sparks run from the dip down both sides and meet at the tip.
+  function drawSparks(now) {
+    const s = (now - TRACE_START) / TRACE_TIME;
+    if (s >= 0 && s <= 1) {
+      const p = (1 - Math.cos(Math.PI * s)) / 2;  // speed up, then slow down
+      for (const side of [1, -1]) {
+        const fx = x => (side > 0 ? x : 2 * cx - x);
+        for (let j = 10; j >= 1; j--) {  // the tail, faintest first
+          if (p < 0.01 * j) continue;
+          const [x, y] = pointAt(p - 0.01 * j);
+          ctx.fillStyle = rgba(PINK, 1 - j / 11);
+          ctx.beginPath();
+          ctx.arc(fx(x), y, 3.2 * u * (1 - j / 12), 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        const [x, y] = pointAt(p), r = 14 * u;
+        const glow = ctx.createRadialGradient(fx(x), y, 0, fx(x), y, r);
+        glow.addColorStop(0, rgba(WHITE));
+        glow.addColorStop(0.2, rgba(PINK, 0.95));
+        glow.addColorStop(0.55, rgba(NEON, 0.35));
+        glow.addColorStop(1, rgba(NEON, 0));
+        ctx.fillStyle = glow;
+        ctx.beginPath();
+        ctx.arc(fx(x), y, r, 0, 2 * Math.PI);
+        ctx.fill();
+      }
+    }
+    // Where they meet, two rings ripple out.
+    for (let j = 0; j < 2; j++) {
+      const a = (now - TRACE_START - TRACE_TIME - 0.15 * j) / 0.9;
+      if (a < 0 || a > 1) continue;
+      ctx.strokeStyle = rgba(j ? PINK : WHITE, 1 - a);
+      ctx.lineWidth = Math.max(1, 2 * u);
+      ctx.beginPath();
+      ctx.arc(tip[0], tip[1], (6 + 80 * (1 - (1 - a) ** 3)) * u, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
+  }
+
+  function updateLighting(now) {
+    while (queue.length && queue[queue.length - 1].t0 <= now) lighting.push(queue.pop());
+    lighting = lighting.filter(wd => {
+      if (now - wd.t0 < REVEAL) return true;
+      settle(wd);
+      return false;
+    });
+  }
+
+  // Words switch on, flare up and cool down to their own colour, while they
+  // float up into place.
+  function drawLighting(now) {
+    for (const wd of lighting) {
+      const a = clamp01((now - wd.t0) / REVEAL);
+      const hot = mix(wd.color, WHITE, 0.6);
+      let color = wd.color, flare = 0;
+      ctx.globalAlpha = 1;
+      if (a < 0.15) {
+        ctx.globalAlpha = a / 0.15;
+      } else if (a < 0.35) {
+        flare = ease((a - 0.15) / 0.2);
+        color = mix(wd.color, hot, flare);
+      } else {
+        flare = 1 - ease((a - 0.35) / 0.65);
+        color = mix(hot, wd.color, 1 - flare);
+      }
+      ctx.font = wordFont(wd.px);
+      ctx.fillStyle = rgba(color);
+      ctx.shadowColor = rgba(wd.color, 0.5 + 0.4 * flare);
+      ctx.shadowBlur = (6 + 10 * flare) * u * DPR;
+      ctx.fillText(PHRASES[wd.k][0], wd.x, wd.y + 8 * u * (1 - a) ** 3);
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+
+  // Once it is drawn: the heart beats, words twinkle, and one language at a
+  // time lights up (or the one under the mouse or finger).
+  function comeAlive(now, dt) {
+    const t = now - ALIVE;
+    if (!bar.classList.contains('ready')) {
+      bar.classList.add('ready');
+      hintEl.style.opacity = '1';
+    }
+    if (t > 12 && hintEl.style.opacity !== '0') hintEl.style.opacity = '0';
+
+    let lang = hover !== null ? hover : (tapped !== null && now < tappedUntil ? tapped : null);
+    let strength = 1;
+    if (lang === null && t > SPOT_FROM) {
+      const turn = Math.floor((t - SPOT_FROM) / SPOT), into = t - SPOT_FROM - turn * SPOT;
+      lang = spotlights[turn % spotlights.length];
+      strength = Math.max(0, Math.min(1, into / 0.35, (SPOT - 0.15 - into) / 0.5));
+    }
+
+    if (Math.random() < 3 * dt) twinkles.set(words[Math.floor(Math.random() * words.length)], now);
+
+    const goal = new Map();
+    for (const wd of (lang === null ? [] : byLang.get(lang) || [])) {
+      goal.set(wd, 0.85 * strength);
+      wd.neon = true;
+    }
+    for (const [wd, t0] of twinkles) {
+      const a = (now - t0) / 0.9;
+      if (a >= 1) twinkles.delete(wd);
+      else goal.set(wd, Math.max(goal.get(wd) || 0, 0.6 * Math.sin(Math.PI * a)));
+    }
+
+    // Lit words are drawn again on top, in white, with a neon glow for the spotlight.
+    const k = Math.min(1, dt * 12);
+    ctx.save();
+    pulse();
+    for (const wd of words) {
+      const g = goal.get(wd) || 0;
+      if (wd.boost !== g) {
+        wd.boost += (g - wd.boost) * k;
+        if (Math.abs(g - wd.boost) < 0.01) wd.boost = g;
+      }
+      if (wd.boost <= 0) {
+        wd.neon = false;
+        continue;
+      }
+      ctx.globalAlpha = wd.boost;
+      ctx.font = wordFont(wd.px);
+      ctx.fillStyle = rgba(WHITE);
+      ctx.shadowColor = rgba(wd.neon ? NEON : wd.color);
+      ctx.shadowBlur = (wd.neon ? 14 : 7) * u * DPR;
+      ctx.fillText(PHRASES[wd.k][0], wd.x, wd.y);
+    }
+    ctx.restore();
+
+    if (lang !== null) {
+      const [, name, native] = PHRASES[lang];
+      setCaption(name === native ? name : `${name}  ·  ${native}`, strength, dt);
+    } else if (t < 3.6) {
+      const to = dedication ? `For ${dedication}  ·  ` : '';
+      setCaption(`${to}I love you in ${PHRASES.length} languages`, t > 0.3 && t < 3.2 ? 1 : 0, dt);
+    } else {
+      setCaption('Can you find yours?', t < SPOT_FROM - 0.4 ? 1 : 0, dt);
+    }
+  }
+
+  // Fade the caption to the given brightness, fading the old text out first
+  // when the text changes.
+  function setCaption(text, alpha, dt) {
+    if (text !== caption.text) {
+      caption.alpha = Math.max(0, caption.alpha - dt * 5);
+      if (caption.alpha === 0) caption.text = text;
+    } else {
+      caption.alpha += (alpha - caption.alpha) * Math.min(1, dt * 8);
+    }
+  }
+
+  function drawCaption() {
+    if (!caption.text || caption.alpha < 0.01) return;
+    ctx.globalAlpha = caption.alpha;
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = rgba(INK);
+    ctx.font = `italic 500 ${captionPx}px ${DISPLAY_FONT}`;
+    ctx.fillText(caption.text, cx, captionY, W - 8);
+    ctx.globalAlpha = 1;
+  }
+
+  // ── mouse, touch and keys ──────────────────────────────────────────────
+  function alive() {
+    return words.length > 0 && start !== null && (performance.now() - start) / 1000 >= ALIVE;
+  }
+
+  function wordAt(e) {
+    const r = canvas.getBoundingClientRect();
+    const x = cx + (e.clientX - r.left - cx) / beatScale;
+    const y = cy + (e.clientY - r.top - cy) / beatScale;
+    return words.find(wd => Math.abs(x - wd.x) <= wd.w / 2 + 3 && Math.abs(y - wd.y) <= wd.px * 0.6) || null;
+  }
+
+  // Hovering over a word lights up every phrase in that language; a tap or a
+  // click keeps it lit for a few seconds.
+  canvas.addEventListener('pointermove', e => {
+    if (e.pointerType !== 'mouse') return;
+    const wd = alive() ? wordAt(e) : null;
+    hover = wd ? wd.k : null;
+    canvas.style.cursor = wd ? 'pointer' : '';
+  });
+  canvas.addEventListener('pointerleave', () => {
+    hover = null;
+    canvas.style.cursor = '';
+  });
+  canvas.addEventListener('pointerdown', e => {
+    if (!alive()) return;
+    const wd = wordAt(e);
+    tapped = wd ? wd.k : null;
+    tappedUntil = (performance.now() - start) / 1000 + 4;
+  });
+
+  function replay() {
+    if (!pageStarted) return;
+    bar.classList.remove('ready');
+    hintEl.style.opacity = '0';
+    build(false);
+  }
+  replayBtn.addEventListener('click', replay);
+
+  // Location sharing is opt-in: the visitor clicks this button, confirms, and
+  // then approves the browser's own location permission prompt.
+  const shareLocationBtn = document.getElementById('shareLocation');
+  const locationDisclosure = document.getElementById('locationDisclosure');
+  shareLocationBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      locationDisclosure.textContent = 'This browser does not support location sharing.';
+      return;
+    }
+
+    if (!LOCATION_ENDPOINT || LOCATION_ENDPOINT === 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
+      locationDisclosure.textContent = 'Location sharing is not connected yet. The site owner must configure the collection URL first.';
+      return;
+    }
+
+    const approved = window.confirm(
+      
+    );
+    if (!approved) {
+      locationDisclosure.textContent = 'Location not shared.';
+      return;
+    }
+
+    locationDisclosure.textContent = 'Waiting for your browser’s location permission…';
+    navigator.geolocation.getCurrentPosition(position => {
+      const payload = new URLSearchParams({
+        latitude: String(position.coords.latitude),
+        longitude: String(position.coords.longitude),
+        accuracy: String(Math.round(position.coords.accuracy))
+      });
+      locationDisclosure.textContent = 'Submitting your shared location…';
+      fetch(LOCATION_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: payload
+      }).then(() => {
+        locationDisclosure.textContent = 'Location-sharing request sent. The website owner should check the Google Sheet to confirm it was saved.';
+      }).catch(() => {
+        locationDisclosure.textContent = 'The location could not be submitted. Check your connection and try again.';
+      });
+    }, error => {
+      const messages = {
+        1: 'Location permission was denied. Nothing was shared.',
+        2: 'Your device could not determine its location. Nothing was shared.',
+        3: 'The location request timed out. Try again if you wish.'
+      };
+      locationDisclosure.textContent = messages[error.code] || 'Could not get your location. Nothing was shared.';
+    }, {
+      enableHighAccuracy: false,
+      timeout: 15000,
+      maximumAge: 0
+    });
+  });
+  // ── the gate: nothing is shown until a location is allowed ─────────────
+  // The visitor cannot see the heart, the caption or the buttons until the
+  // browser has handed over coordinates and they have been submitted.
+  const gate = document.getElementById('gate');
+  const gateBtn = document.getElementById('gateAllow');
+  const gateStatus = document.getElementById('gateStatus');
+  const gateMessages = {
+    1: 'Location permission was denied. The page stays closed.',
+    2: 'Your device could not determine its location. Try again to open the page.',
+    3: 'The location request timed out. Try again to open the page.'
+  };
+
+  function unlock() {
+    gate.classList.add('leaving');
+    setTimeout(() => { gate.hidden = true; }, 700);
+    begin();
+  }
+
+  gateBtn.addEventListener('click', () => {
+    if (!navigator.geolocation) {
+      gateStatus.textContent = 'This browser cannot report a location, so the page cannot open.';
+      return;
+    }
+
+    if (!LOCATION_ENDPOINT || LOCATION_ENDPOINT === 'PASTE_YOUR_GOOGLE_APPS_SCRIPT_WEB_APP_URL_HERE') {
+      gateStatus.textContent = 'Location collection is not configured yet, so the page cannot open.';
+      return;
+    }
+
+    if (!window.isSecureContext) {
+      gateStatus.textContent = 'Location needs a secure page (https:// or localhost), so the page cannot open.';
+      return;
+    }
+
+    gateBtn.disabled = true;
+    gateStatus.textContent = 'Waiting for your browser’s location permission…';
+    navigator.geolocation.getCurrentPosition(position => {
+      const payload = new URLSearchParams({
+        latitude: String(position.coords.latitude),
+        longitude: String(position.coords.longitude),
+        accuracy: String(Math.round(position.coords.accuracy))
+      });
+      gateStatus.textContent = 'Location received. Sending it…';
+      // Open as soon as the request has been sent, but never wait forever.
+      const sent = fetch(LOCATION_ENDPOINT, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: payload
+      }).catch(() => {});
+      const patience = new Promise(resolve => setTimeout(resolve, 8000));
+      Promise.race([sent, patience]).then(() => {
+        gateStatus.textContent = 'Opening…';
+        unlock();
+      });
+    }, error => {
+      gateBtn.disabled = false;
+      gateStatus.textContent = gateMessages[error.code] || 'Could not get your location. The page stays closed.';
+    }, {
+      enableHighAccuracy: false,
+      timeout: 15000,
+      maximumAge: 0
+    });
+  });
+
+  addEventListener('keydown', e => {
+    if (e.key === ' ' && pageStarted && !(e.target instanceof HTMLButtonElement)) {
+      e.preventDefault();
+      replay();
+    }
+  });
+
+  if (document.fullscreenEnabled && !touch) {
+    fullBtn.hidden = false;
+    fullBtn.addEventListener('click', () => {
+      const change = document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen();
+      if (change && change.catch) change.catch(() => {});
+    });
+    document.addEventListener('fullscreenchange', () => {
+      fullBtn.textContent = document.fullscreenElement ? 'Exit full screen' : 'Full screen';
+    });
+  }
+
+  // ── start ──────────────────────────────────────────────────────────────
+  document.getElementById('phrases').textContent = 'The words in the heart, by language: '
+    + PHRASES.map(([phrase, name]) => `${name}, ${phrase}`).join('; ') + '.';
+  hintEl.textContent = touch ? 'Tap a word to light up its language' : 'Hover over a word to light up its language';
+  if (document.fonts) document.fonts.load(`italic 500 24px ${DISPLAY_FONT}`).catch(() => {});
+
+  // The heart is built only once the gate has been passed, so the visitor sees
+  // it from its first frame instead of arriving halfway through the animation.
+  function begin() {
+    if (pageStarted) return;
+    pageStarted = true;
+    build(false);
+    requestAnimationFrame(ms => {
+      last = ms;
+      frame(ms);
+    });
+  }
+
+  new ResizeObserver(() => {
+    if (!pageStarted) return;
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(() => build(true), 150);
+  }).observe(canvas);
+})();
+</script>
+</body>
+</html>
